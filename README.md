@@ -53,7 +53,7 @@ After placing `texts.csv` and `single_points.csv` in the same directory as main.
 ```
 python main.py
 ```
-### 6. Get the output.csv
+### 6. Get the output.csv:
 This file outputs the deep representations of the patients and their cluster assignments.  
 Example:
 ```
