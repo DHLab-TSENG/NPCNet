@@ -3,43 +3,9 @@ import pandas as pd
 from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
 import torch
 from torch.utils.data import DataLoader
-from utils import seed_everything, args
+from utils import seed_everything, args, static_var_cols
 from dataset import SepsisDataset
 from model import ClusteringModule, result
-
-static_var_cols = ["gender",
-                   "congestive_heart_failure",
-                   "cardiac_arrhythmias",
-                   "valvular_disease",
-                   "pulmonary_circulation_disorders",
-                   "peripheral_vascular_disorders",
-                   "hypertension_uncomplicated",
-                   "hypertension_complicated",
-                   "paralysis",
-                   "other_neurological_disorders",
-                   "chronic_pulmonary_disease",
-                   "diabetes_uncomplicated",
-                   "diabetes_complicated",
-                   "hypothyroidism",
-                   "renal_failure",
-                   "liver_disease",
-                   "peptic_ulcer_disease_excluding_bleeding",
-                   "AIDS_H1V",
-                   "lymphoma",
-                   "metastatic_cancer",
-                   "solid_tumor_without_metastasis",
-                   "rheumatoid_arthritis_collagen_vascular_diseases",
-                   "coagulopathy",
-                   "obesity",
-                   "weight_loss",
-                   "fluid_and_electrolyte_disorders",
-                   "blood_loss_anemia",
-                   "deficiency_anemia",
-                   "alcohol_abuse",
-                   "drug_abuse",
-                   "psychoses",
-                   "depression",
-                   "age"]
 
 def main():
     seed_everything(args["seed"])
