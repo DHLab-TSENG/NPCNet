@@ -8,14 +8,14 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, roc_auc_score, f1_score
-from utils import seed_everything, args
+from utils import seed_everything, args, static_var_catnums
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, dropout, max_len = 5000):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p = dropout)
         pe = torch.zeros(max_len, d_model)
-        """ [[0, 1, 2, 3, ...]] """
+        # [[0, 1, 2, 3, ...]]
         position = torch.arange(0, max_len).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2) * -(math.log(10000.0) / d_model))
         pe[:, 0::2] = torch.sin(position * div_term)
@@ -28,12 +28,11 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
         
 class Encoder(nn.Module):
-    def __init__(self, vocab_size, d_model, nhead, num_layers, dim_feedforward = 2048, dropout = 0.1):
+    def __init__(self, vocab_size, d_model, nhead, num_layers, static_var_catnums = static_var_catnums, dim_feedforward = 2048, dropout = 0.1):
         super(Encoder, self).__init__()
         self.embedding = nn.Embedding(num_embeddings = vocab_size, embedding_dim = d_model)
-        self.cat_embeddings = nn.ModuleList([nn.Embedding(2, d_model) for _ in range(31)] + 
-                                            [nn.Embedding(10, d_model)])
         self.positional_encoding = PositionalEncoding(d_model, dropout = 0)
+        self.static_embedding = nn.ModuleList([nn.Embedding(catnum, d_model) for catnum in static_var_catnums])
         encoder_layer = nn.TransformerEncoderLayer(
             d_model = d_model, nhead = nhead, dim_feedforward = dim_feedforward, dropout = dropout, batch_first = True
         )
@@ -43,24 +42,22 @@ class Encoder(nn.Module):
         x = self.embedding(src)
         x = self.positional_encoding(x)
 
-        gender, comorbidities, age = static_var[:, 0], static_var[:, 1:-1], static_var[:, -1]
+        auxiliary_embedding = []
+        for i, embedding_layer in enumerate(self.static_embedding):
+            auxiliary_embedding.append(embedding_layer(static_var[:, i]))
+        auxiliary_embedding = torch.stack(auxiliary_embedding, dim = 1)
+        auxiliary_embedding = auxiliary_embedding.mean(dim = 1)
 
-        auxiliary_embedding = (self.cat_embeddings[0](gender) + sum(
-            e(comorbidities[:, i]) for i, e in enumerate(self.cat_embeddings[1:-1])
-        ) + self.cat_embeddings[-1](age)) / (1 + 31 + 1)
-
-        weight = 0.7
-        x = weight * x + (1 - weight) * auxiliary_embedding.unsqueeze(1)
+        x = args["w"] * x + (1 - args["w"]) * auxiliary_embedding.unsqueeze(1)
         memory = self.encoder(x, src_key_padding_mask = src_key_padding_mask)
         return memory
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size, d_model, nhead, num_layers, dim_feedforward = 2048, dropout = 0.1):
+    def __init__(self, vocab_size, d_model, nhead, num_layers, static_var_catnums = static_var_catnums, dim_feedforward = 2048, dropout = 0.1):
         super(Decoder, self).__init__()
         self.embedding = nn.Embedding(num_embeddings = vocab_size, embedding_dim = d_model)
-        self.cat_embeddings = nn.ModuleList([nn.Embedding(2, d_model) for _ in range(31)] + 
-                                            [nn.Embedding(10, d_model)])
         self.positional_encoding = PositionalEncoding(d_model, dropout = 0)
+        self.static_embedding = nn.ModuleList([nn.Embedding(catnum, d_model) for catnum in static_var_catnums])
         decoder_layer = nn.TransformerDecoderLayer(
             d_model = d_model, nhead = nhead, dim_feedforward = dim_feedforward, dropout = dropout, batch_first = True
         )
@@ -70,15 +67,14 @@ class Decoder(nn.Module):
     def forward(self, tgt, memory, tgt_key_padding_mask, static_var):
         x = self.embedding(tgt)
         x = self.positional_encoding(x)
+        
+        auxiliary_embedding = []
+        for i, embedding_layer in enumerate(self.static_embedding):
+            auxiliary_embedding.append(embedding_layer(static_var[:, i]))
+        auxiliary_embedding = torch.stack(auxiliary_embedding, dim = 1)
+        auxiliary_embedding = auxiliary_embedding.mean(dim = 1)
 
-        gender, comorbidities, age = static_var[:, 0], static_var[:, 1:-1], static_var[:, -1]
-
-        auxiliary_embedding = (self.cat_embeddings[0](gender) + sum(
-            e(comorbidities[:, i]) for i, e in enumerate(self.cat_embeddings[1:-1])
-        ) + self.cat_embeddings[-1](age)) / (1 + 31 + 1)
-
-        weight = 0.7
-        x = weight * x + (1 - weight) * auxiliary_embedding.unsqueeze(1)
+        x = args["w"] * x + (1 - args["w"]) * auxiliary_embedding.unsqueeze(1)
         output = self.decoder(tgt = x, memory = memory, tgt_key_padding_mask = tgt_key_padding_mask)
         return output
 
@@ -177,11 +173,11 @@ class ClusteringModule(nn.Module):
         text_rec = self.decoder(tgt, latent_X, tgt_attention_mask, static_var)
         text_rec = self.decoder.predictor(text_rec)
 
-        """ reconstruction loss """
+        # reconstruction loss
         rec_loss = args["lambda1"] * self.criterion2rec(text_rec.contiguous().view(-1, text_rec.size(-1)), tgt_y.contiguous().view(-1))
 
         latent_X2 = latent_X.mean(dim = 1)
-        """ clustering loss """
+        # clustering loss
         clustering_loss = torch.tensor(0.).to(args["device"])
         clusters = torch.FloatTensor(self.clustering.clusters).to(args["device"])
         for i in range(batch_size):
@@ -189,11 +185,11 @@ class ClusteringModule(nn.Module):
             batch_clustering_loss = torch.matmul(cont_diff.view(1, -1), cont_diff.view(-1, 1))
             clustering_loss += args["lambda2"] * 0.5 * torch.squeeze(batch_clustering_loss)
         
-        """ probability loss """
+        # probability loss
         pred_y = self.fc(latent_X2)
         prob_loss = args["lambda3"] * args["kappa1"] * self.criterion2prob(pred_y, y)
 
-        """ distance loss """
+        # distance loss
         positive_X = self.encoder(positive_text, positive_attention_mask, positive_static_var)
         positive_X = positive_X.mean(dim = 1)
         negative_X = self.encoder(negative_text, negative_attention_mask, negative_static_var)
@@ -235,7 +231,7 @@ class ClusteringModule(nn.Module):
                 self.optimizer.step()
                                         
         self.eval()
-        """ initialize clusters after pretraining """
+        # initialize clusters after pretraining
         batch_X = []
         for batch_idx, (text, attention_mask, static_var, _, _, _, _, _, _, _) in enumerate(train_loader):
             batch_size = text.size()[0]
@@ -321,5 +317,4 @@ def result(inputs, masks, statics, selected_idx, single_points, model, cluster_c
     
     output["cluster"] = np.argmin(dist_matrix, axis = 1)
     print(Series(np.argmin(dist_matrix, axis = 1)).value_counts())
-
     return output
