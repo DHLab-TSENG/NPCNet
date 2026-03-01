@@ -15,7 +15,7 @@ subject_id| event|                                                              
      12548|     2|                       bands bands-10 lymphocytes lymphocytes-10 WBC WBC-1|       1 4 56 17 88 18 89 2 0 0| 1 1 1 1 1 1 1 1 0 0
 ```
 ### 2. single_points.csv
-This file includes the variables listed in `static_var_cols` and the target navigator in the `main.py`.  
+This file includes the variables listed in `static_var_cols` and the target navigator.  
 Example:
 ```
 subject_id| event| gender| anchor_age| comorbidity_1| ...| comorbidity_n| target
@@ -38,12 +38,22 @@ cd NPCNet
 ```
 pip install -r requirements.txt
 ```
-### 4. Run the model:
+### 4. Modify config.py to match your dataset:
+Update hyperparameters in `args` as needed, and adjust the static variables to match your dataset:
+- `static_var_cols`: names of the static variables in your `single_points.csv`
+- `static_var_catnums`: number of categories for each variable in `static_var_cols`
+
+Example:
+```
+static_var_cols = [gender, comorbidity_1, ..., comorbidity_n, age]
+static_var_catnums = [2, 2, ..., 2, 10]
+```
+### 5. Run the model:
 After placing `texts.csv` and `single_points.csv` in the same directory as main.py, run the following command:
 ```
 python main.py
 ```
-### 5. Get the output.csv
+### 6. Get the output.csv
 This file outputs the deep representations of the patients and their cluster assignments.  
 Example:
 ```
