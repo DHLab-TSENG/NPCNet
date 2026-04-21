@@ -1,5 +1,9 @@
 # NPCNet: Navigator-Driven Pseudo Text for Deep Clustering of Early Sepsis Phenotyping
 
+[![arXiv](https://img.shields.io/badge/arXiv-2602.03562-b31b1b.svg)](https://arxiv.org/abs/2602.03562)
+
+This repository contains the official implementation for the arXiv preprint "NPCNet: Navigator-Driven Pseudo Text for Deep Clustering of Early Sepsis Phenotyping".
+
 ## Data Preparation
 All csv files should be placed in the same directory as `main.py`.
 ### 1. texts.csv
